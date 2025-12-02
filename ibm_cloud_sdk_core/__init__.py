@@ -54,3 +54,4 @@ from .utils import date_to_string, string_to_date
 from .utils import convert_model, convert_list
 from .utils import get_query_param
 from .get_authenticator import get_authenticator_from_environment
+from .har_recorder import HAREnabled, HARAppendWithCopies, HARRecorder

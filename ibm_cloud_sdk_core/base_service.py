@@ -326,10 +326,74 @@ class BaseService:
                 del kwargs[key]
                 if key not in silent_keys:
                     logger.warning('"%s" has been removed from the request', key)
+        
+        # ============================================================================
+        # HAR Recording: Initialize tracking variables
+        # ============================================================================
+        from datetime import datetime, timezone
+        from io import BytesIO
+
+        from .har_recorder import HARAppendWithCopies, HARBodyCapture, HAREnabled
+
+        har_enabled = HAREnabled()
+        har_start_time = datetime.now(timezone.utc) if har_enabled else None
+        har_end_time = None
+        har_req_body = b''
+        har_resp_capture = BytesIO()
+        har_response = None
+        har_error = None
+        har_req_content_type = ''
+        har_resp_content_type = ''
+        har_request_obj = None
+
+        def _copy_request_body() -> bytes:
+            body_bytes = b''
+            if 'data' in request:
+                data_val = request.get('data')
+                if isinstance(data_val, bytes):
+                    body_bytes = data_val
+                elif isinstance(data_val, str):
+                    body_bytes = data_val.encode('utf-8')
+            elif 'json' in request:
+                try:
+                    body_bytes = json_import.dumps(request.get('json'), separators=(',', ':')).encode('utf-8')
+                except Exception:
+                    pass
+            return body_bytes
+
+        if har_enabled:
+            har_req_content_type = (request.get('headers', {}) or {}).get('Content-Type', '')
+            try:
+                har_req_body = _copy_request_body()
+            except Exception:
+                har_req_body = b''
+        # ============================================================================
+        # End HAR initialization
+        # ============================================================================
+        
         try:
             logger.debug('Sending HTTP request message')
 
             response = self.http_client.request(**request, cookies=self.jar, **kwargs)
+
+            if har_enabled:
+                har_end_time = datetime.now(timezone.utc)
+                har_response = response
+                har_request_obj = getattr(response, 'request', None)
+                try:
+                    har_resp_content_type = response.headers.get('Content-Type', '') if response is not None else ''
+                except Exception:
+                    har_resp_content_type = ''
+                if response is not None and getattr(response, 'raw', None) is not None:
+                    response.raw = HARBodyCapture(response.raw, har_resp_capture)
+            # ============================================================================
+            # HAR Recording: Capture response
+            # ============================================================================
+            if har_enabled and har_end_time is None:
+                har_end_time = datetime.now(timezone.utc)
+            # ============================================================================
+            # End HAR response capture
+            # ============================================================================
 
             logger.debug('Received HTTP response message, status code %d', response.status_code)
 
@@ -363,6 +427,58 @@ class BaseService:
         except requests.exceptions.SSLError:
             logger.exception(self.ERROR_MSG_DISABLE_SSL)
             raise
+        except Exception as e:
+            # ============================================================================
+            # HAR Recording: Capture error
+            # ============================================================================
+            if har_enabled:
+                har_error = e
+            # ============================================================================
+            # End HAR error capture
+            # ============================================================================
+            raise
+        finally:
+            # ============================================================================
+            # HAR Recording: Record the entry
+            # ============================================================================
+            if har_enabled:
+                try:
+                    har_end_time = har_end_time or datetime.now(timezone.utc)
+
+                    prepared_request = har_request_obj
+                    if prepared_request is None:
+                        class _HARPreparedRequest:
+                            def __init__(self, method, url, headers, body):
+                                self.method = method
+                                self.url = url
+                                self.headers = headers
+                                self.body = body
+
+                        prepared_request = _HARPreparedRequest(
+                            method=request.get('method', 'GET'),
+                            url=request.get('url', ''),
+                            headers=request.get('headers', {}),
+                            body=har_req_body
+                        )
+
+                    HARAppendWithCopies(
+                        prepared_request,
+                        har_response,
+                        har_start_time,
+                        har_end_time,
+                        har_error,
+                        har_req_body,
+                        har_resp_capture.getvalue(),
+                        har_req_content_type,
+                        har_resp_content_type
+                    )
+                except Exception as e:
+                    # Never let HAR recording break the request
+                    logger.debug('HAR recording failed: %s', str(e))
+            # ============================================================================
+            # End HAR recording
+            # ============================================================================
+
 
     def set_enable_gzip_compression(self, should_enable_compression: bool = False) -> None:
         """Set value to enable gzip compression on request bodies"""
