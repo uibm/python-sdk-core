@@ -327,9 +327,7 @@ class BaseService:
                 if key not in silent_keys:
                     logger.warning('"%s" has been removed from the request', key)
         
-        # ============================================================================
         # HAR Recording: Initialize tracking variables
-        # ============================================================================
         from datetime import datetime, timezone
         from io import BytesIO
 
@@ -367,9 +365,7 @@ class BaseService:
                 har_req_body = _copy_request_body()
             except Exception:
                 har_req_body = b''
-        # ============================================================================
         # End HAR initialization
-        # ============================================================================
         
         try:
             logger.debug('Sending HTTP request message')
@@ -386,14 +382,10 @@ class BaseService:
                     har_resp_content_type = ''
                 if response is not None and getattr(response, 'raw', None) is not None:
                     response.raw = HARBodyCapture(response.raw, har_resp_capture)
-            # ============================================================================
             # HAR Recording: Capture response
-            # ============================================================================
             if har_enabled and har_end_time is None:
                 har_end_time = datetime.now(timezone.utc)
-            # ============================================================================
             # End HAR response capture
-            # ============================================================================
 
             logger.debug('Received HTTP response message, status code %d', response.status_code)
 
@@ -428,19 +420,13 @@ class BaseService:
             logger.exception(self.ERROR_MSG_DISABLE_SSL)
             raise
         except Exception as e:
-            # ============================================================================
             # HAR Recording: Capture error
-            # ============================================================================
             if har_enabled:
                 har_error = e
-            # ============================================================================
             # End HAR error capture
-            # ============================================================================
             raise
         finally:
-            # ============================================================================
             # HAR Recording: Record the entry
-            # ============================================================================
             if har_enabled:
                 try:
                     har_end_time = har_end_time or datetime.now(timezone.utc)
@@ -475,9 +461,7 @@ class BaseService:
                 except Exception as e:
                     # Never let HAR recording break the request
                     logger.debug('HAR recording failed: %s', str(e))
-            # ============================================================================
             # End HAR recording
-            # ============================================================================
 
 
     def set_enable_gzip_compression(self, should_enable_compression: bool = False) -> None:

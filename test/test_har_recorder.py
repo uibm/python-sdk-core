@@ -26,16 +26,16 @@ def test_har_enabled_reads_env(tmp_path, monkeypatch):
 
 def test_redact_secret_value_markers():
     text = (
-        "bearer token: Bearer abc "
-        "basic auth: Basic xyz "
-        "iam_token: iam_token:foo "
-        "access_token: access_token=bar "
-        "session token: session-token baz "
-        "token: token qux "
-        "password: password=secret "
-        "apikey: apikey:abc "
-        "secret: secret=sauce "
-        "cookie=verylongcookievalue"
+        "bearer token: Bearer abc "  # pragma: allowlist secret
+        "basic auth: Basic xyz "  # pragma: allowlist secret
+        "iam_token: iam_token:foo "  # pragma: allowlist secret
+        "access_token: access_token=bar "  # pragma: allowlist secret
+        "session token: session-token baz "  # pragma: allowlist secret
+        "token: token qux "  # pragma: allowlist secret
+        "password: password=secret "  # pragma: allowlist secret
+        "apikey: apikey:abc "  # pragma: allowlist secret
+        "secret: secret=sauce "  # pragma: allowlist secret
+        "cookie=verylongcookievalue"  # pragma: allowlist secret
     )
     redacted = har._redact_secret_value(text)
     for marker in [
@@ -55,11 +55,11 @@ def test_redact_secret_value_markers():
 
 def test_redact_json_secrets_labels_specific_tokens():
     payload = {
-        "token": "longtokenvalue" * 3,
-        "access_token": "a" * 60,
-        "session_token": "s" * 60,
-        "iam_token": "i" * 60,
-        "nested": {"password": "hunter2", "api_key": "k" * 60},
+        "token": "longtokenvalue" * 3,  # pragma: allowlist secret
+        "access_token": "a" * 60,  # pragma: allowlist secret
+        "session_token": "s" * 60,  # pragma: allowlist secret
+        "iam_token": "i" * 60,  # pragma: allowlist secret
+        "nested": {"password": "hunter2", "api_key": "k" * 60},  # pragma: allowlist secret
     }
     redacted = json.loads(har._redact_json_secrets(json.dumps(payload)))
     assert redacted["token"] == "[REDACTED_TOKEN]"
@@ -71,7 +71,7 @@ def test_redact_json_secrets_labels_specific_tokens():
 
 
 def test_process_body_content_binary_and_text():
-    text_body = b'{"user":"john","password":"top-secret"}'
+    text_body = b'{"user":"john","password":"top-secret"}'  # pragma: allowlist secret
     text, encoding = har._process_body_content(text_body, True, "application/json")
     assert encoding == ""
     assert "[REDACTED_PASSWORD]" in text
@@ -93,7 +93,7 @@ def test_is_binary_content_detection():
 def test_convert_headers_redacts_sensitive():
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer secret",
+        "Authorization": "Bearer secret",  # pragma: allowlist secret
         "X-API-Key": "shouldstay",
     }
     converted = har._convert_headers(headers, is_request=True)
